@@ -7,6 +7,10 @@ on:
     branches:
       - main
 
+  # Manual deployment button in the GitHub Actions UI.
+  # Go to Actions → "Build image and deploy to IBM Code Engine" → Run workflow.
+  workflow_dispatch:
+
 concurrency:
   group: production-code-engine
   cancel-in-progress: true
@@ -35,14 +39,17 @@ jobs:
       - name: Check out merged source
         uses: actions/checkout@v7
 
-      - name: Define image name and immutable tag
-        id: image
-        shell: bash
-        run: |
-          IMAGE="${ICR_HOST}/${ICR_NAMESPACE}/${IMAGE_NAME}"
-
-          echo "name=${IMAGE}" >> "$GITHUB_OUTPUT"
-          echo "tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+      # Generates tags and OCI labels for the image:
+      #   br.icr.io/namespace/image:latest
+      #   br.icr.io/namespace/image:sha-<short-sha>
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.ICR_HOST }}/${{ env.ICR_NAMESPACE }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-,format=short
 
       # ICR accepts IAM API-key authentication with username "iamapikey".
       - name: Log in to IBM Cloud Container Registry
@@ -63,12 +70,8 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: |
-            ${{ steps.image.outputs.name }}:${{ steps.image.outputs.tag }}
-            ${{ steps.image.outputs.name }}:latest
-          labels: |
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
 
       - name: Install IBM Cloud CLI and Code Engine plug-in
         shell: bash
@@ -80,7 +83,7 @@ jobs:
         shell: bash
         env:
           IBM_CLOUD_API_KEY: ${{ secrets.IBM_CLOUD_API_KEY }}
-          IMAGE_NAME: ${{ steps.image.outputs.name }}
+          IMAGE_NAME: ${{ env.ICR_HOST }}/${{ env.ICR_NAMESPACE }}/${{ env.IMAGE_NAME }}
           IMAGE_DIGEST: ${{ steps.docker-build.outputs.digest }}
         run: |
           set -euo pipefail
