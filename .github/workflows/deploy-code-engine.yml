@@ -85,7 +85,10 @@ jobs:
         shell: bash
         env:
           IBM_CLOUD_API_KEY: ${{ secrets.IBM_CLOUD_API_KEY }}
-          IMAGE_NAME: ${{ env.ICR_HOST }}/${{ env.ICR_NAMESPACE }}/${{ env.IMAGE_NAME }}
+          # Code Engine pulls images through the private internal endpoint.
+          # Prefix the public ICR host with "private." so the pull stays
+          # within the IBM Cloud backbone and the registry accepts the request.
+          IMAGE_NAME: private.${{ env.ICR_HOST }}/${{ env.ICR_NAMESPACE }}/${{ env.IMAGE_NAME }}
           IMAGE_DIGEST: ${{ steps.docker-build.outputs.digest }}
         run: |
           set -euo pipefail
@@ -97,8 +100,8 @@ jobs:
 
           ibmcloud ce project select --name "${CE_PROJECT}"
 
-          # Deploy an immutable image reference:
-          # private.us.icr.io/namespace/app@sha256:...
+          # Deploy an immutable digest reference via the private ICR endpoint:
+          # private.br.icr.io/namespace/app@sha256:...
           DEPLOY_IMAGE="${IMAGE_NAME}@${IMAGE_DIGEST}"
 
           ibmcloud ce app update \
