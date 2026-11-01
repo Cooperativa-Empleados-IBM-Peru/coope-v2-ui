@@ -14,15 +14,15 @@ concurrency:
 env:
   # Example region: us-south.
   # Change both IBM_REGION and ICR_HOST together for another region.
-  IBM_REGION: us-south
-  ICR_HOST: private.us.icr.io
+  IBM_REGION: br.sao
+  ICR_HOST: br.icr.io
 
   IBM_RESOURCE_GROUP: Default
-  CE_PROJECT: my-code-engine-project
-  CE_APP_NAME: my-application
+  CE_PROJECT: coop-backend
+  CE_APP_NAME: coop-frontend
 
-  ICR_NAMESPACE: my-icr-namespace
-  IMAGE_NAME: my-application
+  ICR_NAMESPACE: cr-web-ui-v2
+  IMAGE_NAME: coope-v2-ui
 
 jobs:
   build-push-deploy:
