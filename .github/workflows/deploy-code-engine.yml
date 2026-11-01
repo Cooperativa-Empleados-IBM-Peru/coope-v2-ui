@@ -75,16 +75,17 @@ jobs:
           provenance: false
           platforms: linux/amd64
 
-      - name: Install IBM Cloud CLI and Code Engine plug-in
-        shell: bash
-        run: |
-          curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
-          ibmcloud plugin install code-engine -f
+      - name: Authenticate and configure IBM Cloud CLI
+        uses: IBM/actions-ibmcloud-cli@v2
+        with:
+          ibmcloud_api_key: ${{ secrets.IBM_CLOUD_API_KEY }}
+          ibmcloud_region: ${{ env.IBM_REGION }}
+          ibmcloud_resource_group: ${{ env.IBM_RESOURCE_GROUP }}
+          plugins: 'code-engine'
 
       - name: Update Code Engine application
         shell: bash
         env:
-          IBM_CLOUD_API_KEY: ${{ secrets.IBM_CLOUD_API_KEY }}
           # Code Engine pulls images through the private internal endpoint.
           # Prefix the public ICR host with "private." so the pull stays
           # within the IBM Cloud backbone and the registry accepts the request.
@@ -92,11 +93,6 @@ jobs:
           IMAGE_DIGEST: ${{ steps.docker-build.outputs.digest }}
         run: |
           set -euo pipefail
-
-          ibmcloud login \
-            --apikey "${IBM_CLOUD_API_KEY}" \
-            -r "${IBM_REGION}" \
-            -g "${IBM_RESOURCE_GROUP}"
 
           ibmcloud ce project select --name "${CE_PROJECT}"
 
