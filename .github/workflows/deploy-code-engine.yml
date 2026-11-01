@@ -14,7 +14,7 @@ concurrency:
 env:
   # Example region: us-south.
   # Change both IBM_REGION and ICR_HOST together for another region.
-  IBM_REGION: br-sao
+  IBM_REGION: us-south
   ICR_HOST: br.icr.io
 
   IBM_RESOURCE_GROUP: Default
@@ -87,8 +87,8 @@ jobs:
 
           ibmcloud login \
             --apikey "${IBM_CLOUD_API_KEY}" \
-            --region "${IBM_REGION}" \
-            --resource-group "${IBM_RESOURCE_GROUP}"
+            -r "${IBM_REGION}" \
+            -g "${IBM_RESOURCE_GROUP}"
 
           ibmcloud ce project select --name "${CE_PROJECT}"
 
