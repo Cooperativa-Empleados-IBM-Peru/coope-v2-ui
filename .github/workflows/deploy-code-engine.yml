@@ -1,0 +1,103 @@
+name: Build image and deploy to IBM Code Engine
+
+# Run when a PR is merged by pushing its merge commit to main.
+# Protect main so it cannot be pushed to directly.
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: production-code-engine
+  cancel-in-progress: true
+
+env:
+  # Example region: us-south.
+  # Change both IBM_REGION and ICR_HOST together for another region.
+  IBM_REGION: br.sao
+  ICR_HOST: br.icr.io
+
+  IBM_RESOURCE_GROUP: Default
+  CE_PROJECT: coop-backend
+  CE_APP_NAME: coop-frontend
+
+  ICR_NAMESPACE: cr-web-ui-v2
+  IMAGE_NAME: coope-v2-ui
+
+jobs:
+  build-push-deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out merged source
+        uses: actions/checkout@v7
+
+      - name: Define image name and immutable tag
+        id: image
+        shell: bash
+        run: |
+          IMAGE="${ICR_HOST}/${ICR_NAMESPACE}/${IMAGE_NAME}"
+
+          echo "name=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      # ICR accepts IAM API-key authentication with username "iamapikey".
+      - name: Log in to IBM Cloud Container Registry
+        uses: docker/login-action@v7
+        with:
+          registry: ${{ env.ICR_HOST }}
+          username: iamapikey
+          password: ${{ secrets.IBM_CLOUD_API_KEY }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # This build happens on the GitHub-hosted runner, not in Code Engine.
+      - name: Build and push image to ICR
+        id: docker-build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ steps.image.outputs.name }}:${{ steps.image.outputs.tag }}
+            ${{ steps.image.outputs.name }}:latest
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Install IBM Cloud CLI and Code Engine plug-in
+        shell: bash
+        run: |
+          curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
+          ibmcloud plugin install code-engine -f
+
+      - name: Update Code Engine application
+        shell: bash
+        env:
+          IBM_CLOUD_API_KEY: ${{ secrets.IBM_CLOUD_API_KEY }}
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
+          IMAGE_DIGEST: ${{ steps.docker-build.outputs.digest }}
+        run: |
+          set -euo pipefail
+
+          ibmcloud login \
+            --apikey "${IBM_CLOUD_API_KEY}" \
+            --region "${IBM_REGION}" \
+            --resource-group "${IBM_RESOURCE_GROUP}"
+
+          ibmcloud ce project select --name "${CE_PROJECT}"
+
+          # Deploy an immutable image reference:
+          # private.us.icr.io/namespace/app@sha256:...
+          DEPLOY_IMAGE="${IMAGE_NAME}@${IMAGE_DIGEST}"
+
+          ibmcloud ce app update \
+            --name "${CE_APP_NAME}" \
+            --image "${DEPLOY_IMAGE}"
+
+          ibmcloud ce app get --name "${CE_APP_NAME}"
