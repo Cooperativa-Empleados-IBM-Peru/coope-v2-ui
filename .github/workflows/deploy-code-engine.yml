@@ -14,7 +14,7 @@ concurrency:
 env:
   # Example region: us-south.
   # Change both IBM_REGION and ICR_HOST together for another region.
-  IBM_REGION: br.sao
+  IBM_REGION: br-sao
   ICR_HOST: br.icr.io
 
   IBM_RESOURCE_GROUP: Default
