@@ -46,7 +46,7 @@ jobs:
 
       # ICR accepts IAM API-key authentication with username "iamapikey".
       - name: Log in to IBM Cloud Container Registry
-        uses: docker/login-action@v7
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.ICR_HOST }}
           username: iamapikey
