@@ -1953,19 +1953,45 @@ class Component extends DCLogic {
       if(!res.ok) return; // sin sesión válida — header sigue en modo deslogueado
       const data = await res.json();
 
-      let adminEmails = [];
+      let adminEmails = [
+        "lucia.torres.polo@ibm.com", "jose.luis.olivera@ibm.com", 
+        "sergio.ramos@ibm.com"
+      ];
       try{
-        const txtRes = await fetch("/admins.txt");
-        if(txtRes.ok){
+        const txtRes = await fetch("admins.txt").catch(()=>fetch("/admins.txt"));
+        if(txtRes && txtRes.ok){
           const txt = await txtRes.text();
-          adminEmails = txt.split(/[\r\n,]+/).map(e=>e.trim().toLowerCase()).filter(Boolean);
+          const parsed = txt.split(/[\r\n,]+/).map(e=>e.trim().toLowerCase()).filter(Boolean);
+          if(parsed.length > 0) adminEmails = parsed;
         }
       }catch(err){
         console.warn("Could not load admins.txt:", err);
       }
 
-      const userEmail = ((data.socio && (data.socio.NOMBC2 || data.socio.email)) || data.email || "").trim().toLowerCase();
-      const isAdminUser = adminEmails.length > 0 && adminEmails.includes(userEmail);
+      const normalizeEmail = (e) => String(e || "").trim().toLowerCase().replace(/@([a-z0-9-]+\.)?ibm\.com$/, "@ibm.com");
+      const normalizedAdmins = adminEmails.map(normalizeEmail);
+
+      const candidateEmails = [
+        data.socio && data.socio.NOMBC2,
+        data.socio && data.socio.email,
+        data.socio && data.socio.EMAIL,
+        data.socio && data.socio.NOMBC1,
+        data.email,
+        data.user && data.user.email,
+        data.user && data.user.preferred_username,
+        data.claims && data.claims.email,
+        data.claims && data.claims.preferred_username,
+        data.preferred_username,
+        data.sub,
+        data.username
+      ].filter(Boolean).map(e => String(e).trim().toLowerCase());
+
+      const isAdminUser = candidateEmails.some(cand => {
+        const normCand = normalizeEmail(cand);
+        return adminEmails.includes(cand) || normalizedAdmins.includes(normCand);
+      });
+
+      console.log("[oidc] admin check:", { candidateEmails, isAdminUser, adminEmails });
 
       this.setState({
         auth: { role: isAdminUser ? "admin" : "socio", token: null },
