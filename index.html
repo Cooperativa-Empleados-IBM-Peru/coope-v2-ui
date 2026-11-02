@@ -51,7 +51,9 @@
           <span style="color:#ff8389;font-size:13px;font-weight:600;max-width:340px">{{ apiError }}</span>
         </sc-if>
         <span style="background:#da1e28;color:#fff;font-size:13px;font-weight:700;padding:8px 16px;border-radius:0;letter-spacing:0.02em">Modo administrador</span>
-        <button onClick="{{ logout }}" style="background:transparent;color:#fff;border:1px solid #4c4c4c;border-radius:0;padding:12px 24px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit">Cerrar sesión</button>
+        <sc-if value="{{ !isSocio }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ logout }}" style="background:transparent;color:#fff;border:1px solid #4c4c4c;border-radius:0;padding:12px 24px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit">Cerrar sesión</button>
+        </sc-if>
       </sc-if>
     <sc-if value="{{ isGuest }}" hint-placeholder-val="{{ true }}">
         <button onClick="{{ goLogin }}" style="background:transparent;color:#fff;border:1px solid #4c4c4c;border-radius:0;padding:12px 24px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit">Iniciar sesión</button>
@@ -1950,11 +1952,30 @@ class Component extends DCLogic {
       const res = await fetch(base + "/api/auth/me", { credentials: "include" });
       if(!res.ok) return; // sin sesión válida — header sigue en modo deslogueado
       const data = await res.json();
+
+      let adminEmails = [];
+      try{
+        const txtRes = await fetch("/admins.txt");
+        if(txtRes.ok){
+          const txt = await txtRes.text();
+          adminEmails = txt.split(/[\r\n,]+/).map(e=>e.trim().toLowerCase()).filter(Boolean);
+        }
+      }catch(err){
+        console.warn("Could not load admins.txt:", err);
+      }
+
+      const userEmail = ((data.socio && (data.socio.NOMBC2 || data.socio.email)) || data.email || "").trim().toLowerCase();
+      const isAdminUser = adminEmails.length > 0 && adminEmails.includes(userEmail);
+
       this.setState({
-        auth: { role: "socio", token: null },
+        auth: { role: isAdminUser ? "admin" : "socio", token: null },
         socio: data.socio,
         socioSource: data.source
       });
+      if(isAdminUser){
+        await this.loadPendingChanges();
+        await this.loadBatchHistory();
+      }
       this.maybeShowOnboarding();
     }catch(e){
       console.error("[oidc] failed to load socio:", e);
@@ -2006,7 +2027,7 @@ class Component extends DCLogic {
   maybeShowOnboarding(){
     try{
       if(!localStorage.getItem("coope_onboarding_done")){
-        if (this.state.auth.role === "socio") {
+        if (this.state.socio) {
           localStorage.setItem("coope_onboarding_done","1");
           this.go("socio-perfil");
           return;
@@ -2185,7 +2206,7 @@ class Component extends DCLogic {
       ["Anuncios","anuncios"],["Quiénes Somos","quienes"],["Ahorro","ahorro"],["Proveedores","proveedores"],
       ["Préstamos","prestamos"],["Servicios","servicios"],
       ...(this.state.auth.role === "admin" ? [["Descargar TXT","socios"]] : []),
-      ...(this.state.auth.role === "socio" ? [["Mi Perfil","socio-perfil"]] : [])
+      ...(this.state.socio ? [["Mi Perfil","socio-perfil"]] : [])
     ];
     const nav = navItems.map(([label,key]) => ({
       label, go: () => this.go(key),
@@ -2247,7 +2268,7 @@ class Component extends DCLogic {
       isProveedores: page==="proveedores", isPrestamos: page==="prestamos", isPrestamoDetalle: page==="prestamo-detalle",
       isServicios: page==="servicios", isRegistro: page==="registro", isLogin: page==="login", isAnuncios: page==="anuncios",
       isFondoSepelio: page==="fondo-sepelio",
-      isSocioPerfil: page==="socio-perfil" && this.state.auth.role === "socio",
+      isSocioPerfil: page==="socio-perfil" && !!this.state.socio,
       isPerufarma: page==="perufarma",
       isProveedorDetalle: page==="proveedor-detalle",
       isBebidas: page==="bebidas",
@@ -2321,12 +2342,12 @@ class Component extends DCLogic {
       goOidcLogin: ()=>{ window.location.href = this.state.apiBase + "/api/auth/verify/login"; },
 
       isAdmin: this.state.auth.role === "admin",
-      isSocio: this.state.auth.role === "socio",
+      isSocio: !!this.state.socio,
       profileIncomplete: (() => {
         const s = this.state.socio || {};
         return PROFILE_KEY_FIELDS.some(k => s[k] == null || String(s[k]).trim() === "");
       })(),
-      isGuest: this.state.auth.role !== "admin" && this.state.auth.role !== "socio",
+      isGuest: this.state.auth.role !== "admin" && !this.state.socio,
       logout: async ()=>{ 
         try{
           const base = (this.state.apiBase||"").replace(/\/$/,"");
