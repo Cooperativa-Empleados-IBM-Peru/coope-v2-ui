@@ -2044,8 +2044,12 @@ class Component extends DCLogic {
     if(this.state.auth.token) opts.headers.Authorization = "Bearer " + this.state.auth.token;
     const res = await fetch(base + path, opts);
     if(res.status === 401 || res.status === 403){
-      this.setState({ auth: { role: null, token: null } });
-      throw new Error("Sesión expirada. Vuelve a iniciar sesión.");
+      const body = await res.json().catch(()=>({}));
+      // Solo limpiar el token si era una sesión basada en JWT; no destruir sesión OIDC
+      if(this.state.auth && this.state.auth.token){
+        this.setState({ auth: { role: null, token: null } });
+      }
+      throw new Error(body.error || "No autorizado.");
     }
     if(!res.ok){
       const body = await res.json().catch(()=>({}));
