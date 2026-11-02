@@ -1953,45 +1953,16 @@ class Component extends DCLogic {
       if(!res.ok) return; // sin sesión válida — header sigue en modo deslogueado
       const data = await res.json();
 
-      let adminEmails = [
-        "lucia.torres.polo@ibm.com", "jose.luis.olivera@ibm.com", 
-        "sergio.ramos@ibm.com"
-      ];
-      try{
-        const txtRes = await fetch("admins.txt").catch(()=>fetch("/admins.txt"));
-        if(txtRes && txtRes.ok){
-          const txt = await txtRes.text();
-          const parsed = txt.split(/[\r\n,]+/).map(e=>e.trim().toLowerCase()).filter(Boolean);
-          if(parsed.length > 0) adminEmails = parsed;
-        }
-      }catch(err){
-        console.warn("Could not load admins.txt:", err);
-      }
+      console.log("[oidc] auth loaded from backend:", data);
 
-      const normalizeEmail = (e) => String(e || "").trim().toLowerCase().replace(/@([a-z0-9-]+\.)?ibm\.com$/, "@ibm.com");
-      const normalizedAdmins = adminEmails.map(normalizeEmail);
+      // Backend (DB2) flags administrators directly via ISADMIN: true
+      const isAdminUser = !!(data && (
+        (data.socio && (data.socio.ISADMIN === true || data.socio.ISADMIN === "true" || data.socio.ISADMIN === 1)) ||
+        data.isAdmin === true ||
+        data.role === "admin"
+      ));
 
-      const candidateEmails = [
-        data.socio && data.socio.NOMBC2,
-        data.socio && data.socio.email,
-        data.socio && data.socio.EMAIL,
-        data.socio && data.socio.NOMBC1,
-        data.email,
-        data.user && data.user.email,
-        data.user && data.user.preferred_username,
-        data.claims && data.claims.email,
-        data.claims && data.claims.preferred_username,
-        data.preferred_username,
-        data.sub,
-        data.username
-      ].filter(Boolean).map(e => String(e).trim().toLowerCase());
-
-      const isAdminUser = candidateEmails.some(cand => {
-        const normCand = normalizeEmail(cand);
-        return adminEmails.includes(cand) || normalizedAdmins.includes(normCand);
-      });
-
-      console.log("[oidc] admin check:", { candidateEmails, isAdminUser, adminEmails });
+      console.log("[oidc] admin check:", { isAdminUser, isSocioAdmin: data?.socio?.ISADMIN });
 
       this.setState({
         auth: { role: isAdminUser ? "admin" : "socio", token: null },
@@ -2381,13 +2352,36 @@ class Component extends DCLogic {
         }catch(e){}
         this.setState({auth:{role:null, token:null}, socio:null, socioSource:""}); this.go("inicio"); 
       },
-      socioName: this.state.socio ? [this.state.socio.NOMBRE, this.state.socio.APEPAT, this.state.socio.APEMAT].filter(Boolean).join(" ") : "",
-      socioNameTop: (this.state.socio ? [this.state.socio.NOMBRE, this.state.socio.APEPAT, this.state.socio.APEMAT].filter(Boolean).join(" ") : "") || "Mi perfil",
-      socioNameMenu: (this.state.socio ? [this.state.socio.NOMBRE, this.state.socio.APEPAT, this.state.socio.APEMAT].filter(Boolean).join(" ") : "") || "Socio",
-      socioInitials: this.state.socio ? ((this.state.socio.NOMBRE||"")[0] || "") + ((this.state.socio.APEPAT||"")[0] || "") : "S",
-      socioDocume: this.state.socio ? (this.state.socio.DOCUME || this.state.socio.CODEMPLEADO) : "",
-      socioEmail: this.state.socio ? this.state.socio.NOMBC2 : "",
-      socioPhone: this.state.socio ? this.state.socio.TELCEL : "",
+      socioName: (() => {
+        const s = this.state.socio;
+        if (!s) return "";
+        const parts = [s.NOMBRE, s.APEPAT, s.APEMAT].filter(Boolean).map(x=>String(x).trim()).join(" ");
+        return parts || (s.NOMBREEMPLEADO && String(s.NOMBREEMPLEADO).trim()) || "";
+      })(),
+      socioNameTop: (() => {
+        const s = this.state.socio;
+        if (!s) return "Mi perfil";
+        const parts = [s.NOMBRE, s.APEPAT, s.APEMAT].filter(Boolean).map(x=>String(x).trim()).join(" ");
+        return parts || (s.NOMBREEMPLEADO && String(s.NOMBREEMPLEADO).trim()) || "Mi perfil";
+      })(),
+      socioNameMenu: (() => {
+        const s = this.state.socio;
+        if (!s) return "Socio";
+        const parts = [s.NOMBRE, s.APEPAT, s.APEMAT].filter(Boolean).map(x=>String(x).trim()).join(" ");
+        return parts || (s.NOMBREEMPLEADO && String(s.NOMBREEMPLEADO).trim()) || "Socio";
+      })(),
+      socioInitials: (() => {
+        const s = this.state.socio;
+        if (!s) return "S";
+        const n = [s.NOMBRE, s.APEPAT, s.APEMAT].filter(Boolean).map(x=>String(x).trim()).join(" ") || (s.NOMBREEMPLEADO && String(s.NOMBREEMPLEADO).trim()) || "";
+        const words = n.split(/\s+/).filter(Boolean);
+        if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+        if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+        return "S";
+      })(),
+      socioDocume: this.state.socio ? String(this.state.socio.DOCUME || this.state.socio.CODEMPLEADO || "").trim() : "",
+      socioEmail: this.state.socio ? String(this.state.socio.NOMBC2 || this.state.socio.EMAILEMPLEADO || this.state.socio.EMAILEMPLEADO2 || "").trim() : "",
+      socioPhone: this.state.socio ? String(this.state.socio.TELCEL || "").trim() : "",
       socioTipdidLabel: this.state.socio ? catalogLabel("TIPDID_OPTS", this.state.socio.TIPDID) : "—",
       socioNacionLabel: this.state.socio ? catalogLabel("NACION_OPTS", this.state.socio.NACION) : "—",
       socioSaveMsg: this.state.profileSaveMsg || "",
