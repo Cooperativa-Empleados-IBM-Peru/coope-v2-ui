@@ -6,7 +6,7 @@ USER root
 RUN dnf upgrade -y --refresh --nodocs && dnf clean all && rm -rf /var/cache/dnf
 
 # Copy static assets with non-root ownership (UID 1001, GID 0)
-COPY --chown=1001:0 . /usr/share/nginx/html/
+COPY --chown=1001:0 . /opt/app-root/src/
 RUN chmod -R g=u /usr/share/nginx/html
 
 # Drop back to non-root nginx user (uid 1001)
