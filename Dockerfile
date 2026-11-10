@@ -13,3 +13,5 @@ RUN chmod -R g=u /usr/share/nginx/html
 USER 1001
 
 EXPOSE 8080
+
+CMD ["/usr/libexec/s2i/run"]
