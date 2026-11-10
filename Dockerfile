@@ -1,11 +1,15 @@
-FROM docker.io/library/nginx:alpine
+FROM registry.access.redhat.com/ubi10/nginx-126:latest
 
-# Switch to root only for config changes, then drop back to non-root
 USER root
-RUN apk update && apk upgrade
 
-COPY . /usr/share/nginx/html/
-RUN sed -i 's/listen\s*80;/listen 8080;/' /etc/nginx/conf.d/default.conf
+# Upgrade system packages to latest versions
+RUN dnf upgrade -y --refresh --nodocs && dnf clean all && rm -rf /var/cache/dnf
 
+# Copy static assets with non-root ownership (UID 1001, GID 0)
+COPY --chown=1001:0 . /usr/share/nginx/html/
+RUN chmod -R g=u /usr/share/nginx/html
+
+# Drop back to non-root nginx user (uid 1001)
 USER 1001
+
 EXPOSE 8080
